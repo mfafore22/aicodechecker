@@ -10,7 +10,7 @@ Goal for Phase 1: when a PR is opened or updated, post one comment with a review
 | 2 | Review TypeScript/JavaScript repos first | ⏳ Waiting on you |
 | 3 | AI service is switchable. Start with Claude Haiku (cheapest), each company brings its own API key | ✅ Agreed |
 | 4 | No Redis for now, so it runs on a laptop | ⏳ Waiting on you |
-| 5 | Update the same comment on each push | ⏳ Waiting on you |
+| 5 | Update the same comment on each push | ✅ Agreed |
 | 6 | Review draft PRs too | ⏳ Waiting on you |
 
 ## Done
@@ -27,12 +27,12 @@ All the code type-checks, but none of it has been run against a real PR or a rea
 
 ## To do (in order)
 
-1. [ ] Agree on decisions 2, 4, 5 and 6
-2. [ ] Download a PR's files from GitHub
+1. [ ] Agree on decisions 2, 4 and 6
+2. [x] Download a PR's files from GitHub ([src/github/fetch-pr.ts](src/github/fetch-pr.ts))
 3. [x] LLM wrapper that summarizes each chunk
-4. [ ] Build the comment text
-5. [ ] Post or update the comment on the PR
-6. [ ] Connect the steps into one pipeline
+4. [x] Build the comment text ([src/review/render.ts](src/review/render.ts))
+5. [x] Post or update the comment on the PR ([src/github/comment.ts](src/github/comment.ts))
+6. [x] Connect the steps into one pipeline ([src/pipeline.ts](src/pipeline.ts))
 7. [ ] Background queue
 8. [ ] Webhook server (receives GitHub events)
 9. [ ] Tests for the diff reader, labeller and chunker
