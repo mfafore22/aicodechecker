@@ -1,0 +1,16 @@
+# Used by Probot's setup page (run `npm run dev` with no APP_ID set) to create the GitHub App
+# with the right permissions and events in one click.
+name: aicodechecker
+description: Turns a large pull request into a short, ordered review plan.
+url: https://github.com/mfafore22/aicodechecker
+public: false
+default_events:
+  - pull_request
+default_permissions:
+  # Read the diff and post or update the review-plan comment.
+  pull_requests: write
+  # Read file contents.
+  contents: read
+  # Read issues the PR says it fixes.
+  issues: read
+  metadata: read

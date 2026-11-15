@@ -15,6 +15,8 @@ const NOISE_LABEL: Record<NoiseReason, string> = {
   vendored: "vendored",
   snapshot: "test snapshot",
   binary: "binary",
+  empty: "empty file",
+  "no-line-changes": "no line changes",
   rename: "renamed, no changes",
   whitespace: "formatting only",
 };

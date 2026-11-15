@@ -2,9 +2,9 @@
 
 A GitHub App that turns a large pull request into a short, ordered review plan. It splits the PR into chunks a reviewer can read one at a time, marks noise (lockfiles, generated code, formatting) as "skim only," and uses an LLM to say what each chunk changes, why, and what to check closely.
 
-The full design is in [ARCHITECTURE.md](ARCHITECTURE.md). This README covers the plan for Phase 1 (the MVP), the decisions that still need sign-off, and what exists so far.
+The full design is in [ARCHITECTURE.md](ARCHITECTURE.md). This README covers Phase 1 (the MVP): what it does, how it's built, and how to run it. Progress is tracked in [PLAN.md](PLAN.md).
 
-> **Status: planning.** Some early code exists (listed below) but the app does not run yet. Nothing has been tested or type-checked.
+> **Status: Phase 1 code complete, not yet tried on a real PR.** It type-checks, the tests pass, and the server starts. The next step is creating the GitHub App and running it on a test repo.
 
 ---
 
@@ -49,7 +49,7 @@ Adds rate limiting to the public API so one client can't exhaust the shared quot
 ```
 GitHub PR event
   → webhook server        verifies the signature, queues a job, replies right away
-  → queue                 runs the job in the background
+  → queue                 runs the job in the background (in this process, no Redis)
   → fetch PR              title, description, changed files with diffs, linked issues
   → classify files        noise or real; types / logic / config / tests / docs
   → chunk                 group by folder, order for reading, split chunks that are too big
@@ -57,32 +57,32 @@ GitHub PR event
   → post comment          create the comment, or update it on later pushes
 ```
 
-### Planned modules
+### Modules
 
-| Module | Job | State |
-| --- | --- | --- |
-| `src/server.ts` | Starts the Probot server | Not written |
-| `src/index.ts` | Listens for PR events and queues a job | Not written |
-| `src/queue.ts` | Background jobs: in-process by default, Redis + BullMQ when `REDIS_URL` is set | Not written |
-| `src/github/fetch-pr.ts` | Gets the PR, its files and linked issues from the GitHub API | Not written |
-| `src/diff/parse-patch.ts` | Reads each file's diff into hunks and changed line ranges | **Draft written** |
-| `src/chunker/classify.ts` | Marks noise and gives each file a role | **Draft written** |
-| `src/chunker/chunk.ts` | Groups files into chunks and orders them | **Draft written** |
-| `src/llm/provider.ts` | One interface for any LLM, so models can be swapped | Not written |
-| `src/llm/anthropic.ts` | Claude implementation of that interface | Not written |
-| `src/review/render.ts` | Builds the comment's Markdown | Not written |
-| `src/github/comment.ts` | Creates or updates the comment | Not written |
-| `src/pipeline.ts` | Runs the steps above in order | Not written |
-| `src/types.ts` | Shared data types | **Draft written** |
+| Module | Job |
+| --- | --- |
+| [src/server.ts](src/server.ts) | Starts the Probot server |
+| [src/index.ts](src/index.ts) | Listens for PR events and queues a review |
+| [src/queue.ts](src/queue.ts) | Runs reviews in the background: a few at a time, one per PR, newest push only |
+| [src/github/fetch-pr.ts](src/github/fetch-pr.ts) | Gets the PR, its files and linked issues from the GitHub API |
+| [src/diff/parse-patch.ts](src/diff/parse-patch.ts) | Reads each file's diff into hunks and changed line ranges |
+| [src/chunker/classify.ts](src/chunker/classify.ts) | Marks noise and gives each file a role |
+| [src/chunker/chunk.ts](src/chunker/chunk.ts) | Groups files into chunks and orders them |
+| [src/llm/](src/llm/) | One interface for any LLM, with a Claude implementation |
+| [src/review/render.ts](src/review/render.ts) | Builds the comment's Markdown |
+| [src/github/comment.ts](src/github/comment.ts) | Creates or updates the comment |
+| [src/pipeline.ts](src/pipeline.ts) | Runs the steps above in order and drops a review if a newer push arrived |
+| [src/types.ts](src/types.ts) | Shared data types |
 
-### How the chunker decides things (draft rules, open to change)
+### How the chunker decides things
 
 **Noise ("skim only"):**
 - Lockfiles: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `go.sum`, `Cargo.lock`, `poetry.lock` and others.
 - Generated files: `dist/`, `build/`, `coverage/`, `*.min.js`, `*.map`, and files whose first lines say `@generated` or `DO NOT EDIT`.
 - Vendored code: `node_modules/`, `vendor/`, `third_party/`.
 - Test snapshots: `__snapshots__/`, `*.snap`.
-- Pure renames with no content change, and binary files.
+- Pure renames with no content change.
+- Files with no line changes: binary files (recognised by extension, such as `.png` or `.zip`), new or deleted empty files, and permission-only changes.
 - Edits that only change whitespace.
 
 **File roles**, decided by path:
@@ -100,20 +100,18 @@ GitHub PR event
 
 ---
 
-## Decisions that need your sign-off
+## Decisions
 
-The draft code follows the choices marked **(proposed)**. None of them are final.
-
-| # | Decision | Proposed | Alternatives |
-| --- | --- | --- | --- |
-| 1 | Language for the app | **TypeScript + Probot** (proposed, as ARCHITECTURE.md suggests) | Python + FastAPI |
-| 2 | Language reviewed in Phase 1 | **TypeScript/JavaScript** (proposed). The Phase 1 rules are mostly path-based, so other languages still get chunked; this choice decides which language Phase 2's tree-sitter work targets first. | Python, other |
-| 3 | LLM | **Claude** through one wrapper (proposed). Model `claude-opus-5-5`, changeable with `LLM_MODEL`. | OpenAI, or support both from day one |
-| 4 | API keys and private code | **Bring your own key** (proposed): each install sets its own `ANTHROPIC_API_KEY`. | Self-hosted model; a hosted key we pay for |
-| 5 | Queue | **In-process queue by default, Redis + BullMQ when `REDIS_URL` is set** (proposed). This runs on Windows without installing Redis. | Redis required from day one |
-| 6 | Chunk checklist | **Re-posting after a new push resets the ticked boxes** (proposed, simplest). | Keep ticks for chunks whose files didn't change |
-| 7 | Draft PRs | **Review them too** (proposed). | Wait until "ready for review" |
-| 8 | Hosting | **Not decided** | Fly.io, Railway, any container host |
+| # | Decision | Choice |
+| --- | --- | --- |
+| 1 | Language for the app | TypeScript + Probot |
+| 2 | Language reviewed first | TypeScript/JavaScript. Phase 1 rules are path-based, so other languages still get chunked; this decides which language Phase 2's tree-sitter work targets first. |
+| 3 | LLM | Claude through a switchable wrapper. Default model `claude-haiku-5-5` (cheapest); change it with `LLM_MODEL`. |
+| 4 | API keys and private code | Bring your own key: each install sets its own `ANTHROPIC_API_KEY`. |
+| 5 | Queue | In-process, no Redis. Waiting reviews are lost on restart; the next push re-queues them. Revisit when running more than one server. |
+| 6 | Updates | Each push updates the same comment. Ticked checkboxes reset. |
+| 7 | Draft PRs | Reviewed too. |
+| 8 | Hosting | Not decided (Fly.io, Railway, or any container host). |
 
 ### Open questions
 
@@ -123,33 +121,37 @@ The draft code follows the choices marked **(proposed)**. None of them are final
 
 ---
 
-## GitHub App setup (planned)
-
-You'll need these once the app runs. Nothing to do yet.
-
-1. Create a GitHub App with these permissions:
-   - Pull requests: **read & write** (to read the diff and post the comment)
-   - Contents: **read**
-   - Issues: **read** (for linked issues)
-   - Metadata: **read**
-2. Subscribe it to the **Pull request** event.
-3. Copy `.env.example` to `.env` and fill in the App ID, private key path, webhook secret and `ANTHROPIC_API_KEY`.
-4. For local testing, create a channel at https://smee.io and put its URL in `WEBHOOK_PROXY_URL` so GitHub events reach your machine.
-5. Run `npm install`, then `npm run dev`.
+## Running it
 
 ### Requirements
 
-- Node.js 20 or newer (this machine has 22)
+- Node.js 20 or newer
 - A GitHub account where you can create an app
 - An Anthropic API key
-- Optional: Redis, only if decision 5 changes
 
----
+### First run: create the GitHub App
 
-## Build order once the plan is approved
+1. `npm install`
+2. `npm run dev`, then open http://localhost:3000. With no app configured yet, Probot shows a setup page.
+3. Click through it. It creates a GitHub App from [app.yml](app.yml) with the right permissions (pull requests: write; contents, issues, metadata: read; the Pull request event). It also creates a smee.io channel so GitHub events reach your laptop, and writes `APP_ID`, `PRIVATE_KEY`, `WEBHOOK_SECRET` and `WEBHOOK_PROXY_URL` into `.env`.
+4. Add the rest of the settings from [.env.example](.env.example) to `.env`, at least `ANTHROPIC_API_KEY`.
+5. Install the app on a test repo, restart `npm run dev`, and open a PR there.
 
-1. Agree on the decisions above.
-2. Finish the remaining modules in this order: fetch PR, LLM wrapper, comment renderer, pipeline, queue, webhook server.
-3. Add tests for the diff parser, classifier, chunker and renderer.
-4. Install the app on a test repo and run it on a few real PRs.
-5. Adjust the chunking rules based on what those runs show.
+To set the app up by hand instead, copy `.env.example` to `.env` and fill it in from the app's settings page on GitHub.
+
+### Settings (`.env`)
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | (required) | Your Anthropic key |
+| `LLM_MODEL` | `claude-haiku-5-5` | Model for summaries |
+| `LLM_EFFORT` | `medium` | `low` to `max` |
+| `LLM_CONCURRENCY` | `4` | Chunk summaries run at once, per review |
+| `REVIEW_CONCURRENCY` | `2` | PRs reviewed at once |
+
+### Commands
+
+- `npm run dev`: run with auto-reload
+- `npm test`: run the tests
+- `npm run typecheck`: check types
+- `npm run build` then `npm start`: production build

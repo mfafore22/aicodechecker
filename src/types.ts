@@ -45,6 +45,8 @@ export type NoiseReason =
   | "vendored"
   | "snapshot"
   | "binary"
+  | "empty"
+  | "no-line-changes"
   | "rename"
   | "whitespace";
 
