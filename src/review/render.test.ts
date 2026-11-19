@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildChunks } from "../chunker/chunk.js";
 import { classifyFile } from "../chunker/classify.js";
 import type { ReviewedChunk } from "../types.js";
-import { COMMENT_MARKER, renderReviewPlan } from "./render.js";
+import { COMMENT_MARKER, fileLink, renderReviewPlan } from "./render.js";
 
 const pr = { owner: "me", repo: "app", number: 7 };
 
@@ -46,5 +46,23 @@ describe("renderReviewPlan", () => {
     const md = renderReviewPlan({ ...pr, chunks: many });
     expect(md.length).toBeLessThanOrEqual(60_000);
     expect(md).toContain("more chunks");
+  });
+});
+
+describe("fileLink", () => {
+  const input = { owner: "me", repo: "app", number: 7, chunks: [] };
+  const line = (status: "modified" | "removed", patch: string) =>
+    fileLink(input, classifyFile({ path: "src/a.ts", status, additions: 0, deletions: 2, patch })).split("#")[1].slice(69);
+
+  it("points at the first added line on the new side", () => {
+    expect(line("modified", "@@ -3,1 +3,2 @@\n a\n+b")).toBe("R4");
+  });
+
+  it("points at the old side for a deleted file", () => {
+    expect(line("removed", "@@ -1,2 +0,0 @@\n-a\n-b")).toBe("L1");
+  });
+
+  it("leaves out the line when a deletion is at the very top of the file", () => {
+    expect(line("modified", "@@ -1,2 +0,0 @@\n-a\n-b")).toBe("");
   });
 });

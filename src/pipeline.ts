@@ -20,7 +20,7 @@ export interface ReviewJob extends PullRequestRef {
 export interface PipelineDeps {
   octokit: ProbotOctokit;
   llm: LLMProvider;
-  log: Logger;
+  log: Pick<Logger, "info" | "warn">;
   /** How many chunk summaries run at once. */
   concurrency: number;
 }
@@ -37,9 +37,7 @@ export async function runReview(deps: PipelineDeps, job: ReviewJob): Promise<Rev
 
   const commentId = await upsertReviewComment(octokit, job, renderInProgress());
   try {
-    const chunks = buildChunks(pr.files.map(classifyFile));
-    const reviewed = await summarizeChunks(deps, pr, chunks);
-    const overview = await writeOverview(deps, pr, reviewed);
+    const plan = await buildReviewPlan(deps, pr);
 
     // The AI calls take a while; don't overwrite a newer review with this one.
     if ((await currentHeadSha(octokit, job)) !== job.headSha) {
@@ -47,9 +45,8 @@ export async function runReview(deps: PipelineDeps, job: ReviewJob): Promise<Rev
       return "stale";
     }
 
-    const body = renderReviewPlan({ owner: pr.owner, repo: pr.repo, number: pr.number, overview, chunks: reviewed });
-    await upsertReviewComment(octokit, job, body, commentId);
-    log.info({ job, chunks: reviewed.length }, "Posted review plan");
+    await upsertReviewComment(octokit, job, plan.body, commentId);
+    log.info({ job, chunks: plan.chunks.length }, "Posted review plan");
     return "posted";
   } catch (error) {
     await upsertReviewComment(octokit, job, renderFailed(), commentId).catch(() => {});
@@ -57,12 +54,37 @@ export async function runReview(deps: PipelineDeps, job: ReviewJob): Promise<Rev
   }
 }
 
+export interface ReviewPlan {
+  body: string;
+  chunks: ReviewedChunk[];
+}
+
+/**
+ * Labels, chunks and summarizes a PR and renders the comment, without touching GitHub.
+ * With no `llm`, chunks are listed without summaries (free, for previews).
+ */
+export async function buildReviewPlan(
+  deps: Pick<PipelineDeps, "log" | "concurrency"> & { llm?: LLMProvider },
+  pr: PullRequestData,
+): Promise<ReviewPlan> {
+  const chunks = buildChunks(pr.files.map(classifyFile));
+  const { llm } = deps;
+  const reviewed = llm
+    ? await summarizeChunks({ ...deps, llm }, pr, chunks)
+    : chunks.map((c): ReviewedChunk => (c.skimOnly ? c : { ...c, summaryError: "AI summaries were turned off" }));
+  const overview = llm ? await writeOverview({ ...deps, llm }, pr, reviewed) : undefined;
+  const body = renderReviewPlan({ owner: pr.owner, repo: pr.repo, number: pr.number, overview, chunks: reviewed });
+  return { body, chunks: reviewed };
+}
+
+type SummaryDeps = Pick<PipelineDeps, "llm" | "log" | "concurrency">;
+
 function prInfo(pr: PullRequestData): PullRequestInfo {
   return { title: pr.title, body: pr.body, linkedIssues: pr.linkedIssues };
 }
 
 async function summarizeChunks(
-  { llm, log, concurrency }: PipelineDeps,
+  { llm, log, concurrency }: SummaryDeps,
   pr: PullRequestData,
   chunks: Chunk[],
 ): Promise<ReviewedChunk[]> {
@@ -83,7 +105,7 @@ async function summarizeChunks(
 }
 
 async function writeOverview(
-  { llm, log }: PipelineDeps,
+  { llm, log }: SummaryDeps,
   pr: PullRequestData,
   chunks: ReviewedChunk[],
 ): Promise<string | undefined> {

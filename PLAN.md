@@ -30,6 +30,10 @@ Goal for Phase 1: when a PR is opened or updated, post one comment with a review
 - [x] Fixed: a new empty file was marked "binary". It's now "empty file"; binary files are recognised by extension
 - [x] `npm test` works when VS Code opens the folder as `c:\` (lowercase), via [scripts/test.mjs](scripts/test.mjs)
 
+- [x] Dry run: `npm run preview -- <PR>` prints the plan for any PR without posting ([src/preview.ts](src/preview.ts))
+- [x] GitHub Actions runs the type-check and tests on every push and PR
+- [x] Fixed: links to deleted files pointed at line 0; they now point at the old side of the diff
+
 All the code type-checks and the tests pass, and the server starts. It has not yet been run against a real PR or a real API key.
 
 ## To do (in order)
@@ -45,6 +49,6 @@ All the code type-checks and the tests pass, and the server starts. It has not y
 9. [x] Tests for the diff reader, labeller and chunker
 10. [x] Fix known bug: a new empty file is wrongly marked "binary"
 11. [ ] Create the GitHub App and try it on a real PR (steps in the README)
-12. [ ] Adjust the chunking rules based on what real PRs show
+12. [ ] Adjust the chunking rules based on what real PRs show (try `npm run preview` on a few first)
 
 We explain each step before building it.

@@ -72,6 +72,7 @@ GitHub PR event
 | [src/review/render.ts](src/review/render.ts) | Builds the comment's Markdown |
 | [src/github/comment.ts](src/github/comment.ts) | Creates or updates the comment |
 | [src/pipeline.ts](src/pipeline.ts) | Runs the steps above in order and drops a review if a newer push arrived |
+| [src/preview.ts](src/preview.ts) | `npm run preview`: prints the plan for any PR, posts nothing |
 | [src/types.ts](src/types.ts) | Shared data types |
 
 ### How the chunker decides things
@@ -129,6 +130,18 @@ GitHub PR event
 - A GitHub account where you can create an app
 - An Anthropic API key
 
+### Try it without the GitHub App
+
+`npm run preview` builds the review plan for any PR and prints it, without posting anything:
+
+```
+npm run preview -- https://github.com/owner/repo/pull/123 --no-ai   # chunks only, free
+npm run preview -- owner/repo#123                                    # with AI summaries
+npm run preview -- owner/repo#123 > preview.md                       # save to a file
+```
+
+AI summaries need `ANTHROPIC_API_KEY` in `.env`. Public PRs work with no GitHub token (about 60 requests an hour). For private repos, or more requests, set `GITHUB_TOKEN`.
+
 ### First run: create the GitHub App
 
 1. `npm install`
@@ -152,6 +165,9 @@ To set the app up by hand instead, copy `.env.example` to `.env` and fill it in 
 ### Commands
 
 - `npm run dev`: run with auto-reload
+- `npm run preview -- <PR>`: print the review plan for a PR without posting it
 - `npm test`: run the tests
 - `npm run typecheck`: check types
 - `npm run build` then `npm start`: production build
+
+GitHub Actions runs the type-check and tests on every push and PR ([.github/workflows/ci.yml](.github/workflows/ci.yml)).

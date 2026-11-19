@@ -32,7 +32,10 @@ export interface RenderInput {
 /** Link to the file's diff on the PR's "Files changed" tab, at its first changed line. */
 export function fileLink(input: RenderInput, file: ClassifiedFile): string {
   const anchor = createHash("sha256").update(file.path).digest("hex");
-  const line = file.span ? `R${file.span[0]}` : "";
+  // A deleted file has no new side, so point at the old side (L) instead of the new side (R).
+  const oldStart = file.hunks[0]?.oldStart;
+  const line =
+    file.status === "removed" ? (oldStart ? `L${oldStart}` : "") : file.span && file.span[0] > 0 ? `R${file.span[0]}` : "";
   return `https://github.com/${input.owner}/${input.repo}/pull/${input.number}/files#diff-${anchor}${line}`;
 }
 
